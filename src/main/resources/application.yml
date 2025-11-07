@@ -7,7 +7,7 @@ spring:
     name: yu-picture-backend
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/yu_picture
+    url: jdbc:mysql://localhost:3306/yupicture
     username: root
     password: abc123
 mybatis-plus:
