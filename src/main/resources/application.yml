@@ -10,6 +10,9 @@ spring:
     url: jdbc:mysql://localhost:3306/yupicture
     username: root
     password: abc123
+  servlet:
+    multipart:
+      max-file-size: 2MB
 mybatis-plus:
   configuration:
     # MyBatis 配置，map-underscore-to-camel-case为驼峰的配置

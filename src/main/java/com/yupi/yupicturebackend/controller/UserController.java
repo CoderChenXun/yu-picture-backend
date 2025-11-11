@@ -61,7 +61,7 @@ public class UserController {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "登录参数错误");
         }
         // 取出登录参数
-        String userCount = userLoginRequest.getUserCount();
+        String userCount = userLoginRequest.getUserAccount();
         String userPassword = userLoginRequest.getUserPassword();
         // 登录
         LoginUserVo loginUserVo = userService.userLogin(userCount, userPassword, request);
@@ -142,14 +142,17 @@ public class UserController {
 
     @PostMapping("/list/page/vo")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
-    public BaseResponse<List<UserVo>> listUserVo(@RequestBody UserQueryRequest userQueryRequest) {
+    public BaseResponse<Page<UserVo>> listUserVo(@RequestBody UserQueryRequest userQueryRequest) {
         ThrowUtils.throwIf(ObjectUtil.isNull(userQueryRequest), ErrorCode.PARAMS_ERROR);
         int current = userQueryRequest.getCurrent();
         int pageSize = userQueryRequest.getPageSize();
         ThrowUtils.throwIf(current <= 0 || pageSize <= 0, ErrorCode.PARAMS_ERROR);
         Page<User> page = new Page<>(current, pageSize);
         Page<User> userPage = userService.page(page, userService.getQueryWrapper(userQueryRequest));
-        return ResultUtils.success(userService.getListUserVo(userPage.getRecords()));
+        Page<UserVo> userVoPage = new Page<>(current, pageSize, userPage.getTotal());
+        List<UserVo> listUserVo = userService.getListUserVo(userPage.getRecords());
+        userVoPage.setRecords(listUserVo);
+        return ResultUtils.success(userVoPage);
     }
 
     @PostMapping("/update")

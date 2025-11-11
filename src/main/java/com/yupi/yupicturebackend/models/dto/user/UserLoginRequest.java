@@ -13,7 +13,7 @@ public class UserLoginRequest implements Serializable {
     /**
      * 账号
      */
-    private String userCount;
+    private String userAccount;
 
     /**
      * 密码
