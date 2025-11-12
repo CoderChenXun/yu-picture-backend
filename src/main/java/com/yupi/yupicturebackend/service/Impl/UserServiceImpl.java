@@ -201,6 +201,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         queryWrapper.orderBy(StrUtil.isNotBlank(sortField), sortOrder.equals("ascend"), sortField);
         return queryWrapper;
     }
+
+    @Override
+    public boolean isAdmin(User user) {
+        // 如果user不为null，并且user的userRole为管理员
+        return user != null && UserConstant.ADMIN_ROLE.equals(user.getUserRole());
+    }
 }
 
 
