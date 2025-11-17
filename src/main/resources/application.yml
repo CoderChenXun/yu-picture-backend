@@ -2,7 +2,17 @@ server:
   port: 8123
   servlet:
     context-path: /api
+    session:
+      cookie:
+        # 默认30天
+        max-age: 2592000
 spring:
+  session:
+    store-type: redis
+    # 默认30天
+    time-to-live: 2592000
+  profiles:
+    active: local
   application:
     name: yu-picture-backend
   datasource:
@@ -13,6 +23,12 @@ spring:
   servlet:
     multipart:
       max-file-size: 2MB
+  redis:
+    database: 0
+    host: 127.0.0.1
+    port: 6379
+    timeout: 5000
+    password: 123456
 mybatis-plus:
   configuration:
     # MyBatis 配置，map-underscore-to-camel-case为驼峰的配置

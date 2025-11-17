@@ -6,7 +6,6 @@ import com.yupi.yupicturebackend.exception.ErrorCode;
 import com.yupi.yupicturebackend.models.entity.User;
 import com.yupi.yupicturebackend.models.enums.UserRoleEnum;
 import com.yupi.yupicturebackend.service.UserService;
-import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
