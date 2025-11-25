@@ -1,4 +1,4 @@
-package com.yupi.yupicturebackend.service.Impl;
+package com.yupi.yupicturebackend.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.ObjectUtil;

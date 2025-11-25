@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 import java.io.Serializable;
+import java.util.Date;
 import java.util.List;
 
 @EqualsAndHashCode(callSuper = true)
@@ -85,6 +86,21 @@ public class PictureQueryRequest extends PageRequest implements Serializable {
      * 审核人 id
      */
     private Long reviewerId;
+
+    /**
+     * 空间id
+     */
+    private Long spaceId;
+
+    /**
+     * 只查询公共图库的 图片
+     */
+    private Boolean nullSpaceId;
+
+    // 按照编辑时间进行查询
+    private Date startEditTime;
+
+    private Date endEditTime;
 
     private static final long serialVersionUID = 3320866558770643909L;
 }

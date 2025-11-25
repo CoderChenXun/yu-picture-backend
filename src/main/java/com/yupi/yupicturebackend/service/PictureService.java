@@ -2,16 +2,16 @@ package com.yupi.yupicturebackend.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.yupi.yupicturebackend.models.dto.picture.PictureQueryRequest;
-import com.yupi.yupicturebackend.models.dto.picture.PictureReviewRequest;
-import com.yupi.yupicturebackend.models.dto.picture.PictureUploadByBatchRequest;
-import com.yupi.yupicturebackend.models.dto.picture.PictureUploadRequest;
+import com.yupi.yupicturebackend.api.imageSearch.model.ImageSearchResult;
+import com.yupi.yupicturebackend.common.DeleteRequest;
+import com.yupi.yupicturebackend.models.dto.picture.*;
 import com.yupi.yupicturebackend.models.entity.Picture;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.yupi.yupicturebackend.models.entity.User;
 import com.yupi.yupicturebackend.models.vo.PictureVo;
 
 import javax.servlet.http.HttpServletRequest;
+import java.util.List;
 
 
 /**
@@ -39,4 +39,18 @@ public interface PictureService extends IService<Picture> {
     Integer uploadPictureByBatch(PictureUploadByBatchRequest pictureUploadByBatchRequest, User loginUser);
 
     void clearPictureFile(Picture oldPicture);
+
+    void checkPictureAuth(User loginUser, Picture picture);
+
+    void deletePicture(DeleteRequest deleteRequest, User loginUser);
+
+    void updatePicture(PictureUpdateRequest pictureUpdateRequest, User loginUser);
+
+    void editPicture(PictureEditRequest pictureEditRequest, User loginUser);
+
+    List<ImageSearchResult> searchPictureByPicture(SearchPictureByPictureRequest searchPictureByPictureRequest, User loginUser);
+
+    List<PictureVo> searchPictureByColor(SearchPictureByColorRequest searchPictureByColorRequest, User loginUser);
+
+    void editPictureByBatch(PictureEditByBatchRequest pictureEditByBatchRequest, User loginUser);
 }

@@ -1,7 +1,5 @@
 package com.yupi.yupicturebackend.controller;
 
-import cn.hutool.core.bean.BeanUtil;
-import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
@@ -11,6 +9,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.yupi.yupicturebackend.annotation.AuthCheck;
+import com.yupi.yupicturebackend.api.imageSearch.model.ImageSearchResult;
 import com.yupi.yupicturebackend.common.BaseResponse;
 import com.yupi.yupicturebackend.common.DeleteRequest;
 import com.yupi.yupicturebackend.common.ResultUtils;
@@ -20,18 +19,19 @@ import com.yupi.yupicturebackend.exception.ErrorCode;
 import com.yupi.yupicturebackend.exception.ThrowUtils;
 import com.yupi.yupicturebackend.models.dto.picture.*;
 import com.yupi.yupicturebackend.models.entity.Picture;
+import com.yupi.yupicturebackend.models.entity.Space;
 import com.yupi.yupicturebackend.models.entity.User;
 import com.yupi.yupicturebackend.models.enums.PictureReviewStatusEnum;
 import com.yupi.yupicturebackend.models.vo.PictureTagCategory;
 import com.yupi.yupicturebackend.models.vo.PictureVo;
 import com.yupi.yupicturebackend.service.PictureService;
+import com.yupi.yupicturebackend.service.SpaceService;
 import com.yupi.yupicturebackend.service.UserService;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.util.DigestUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import springfox.documentation.spring.web.json.Json;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
@@ -52,6 +52,9 @@ public class PictureController {
 
     @Resource
     private StringRedisTemplate stringRedisTemplate;
+
+    @Resource
+    private SpaceService spaceService;
 
     // 本地缓存
     private final Cache<String, String> LOCAL_CACHE =
@@ -115,18 +118,8 @@ public class PictureController {
         if (deleteRequest.getId() == null || deleteRequest.getId() <= 0) {
             ThrowUtils.throwIf(true, ErrorCode.PARAMS_ERROR);
         }
-        // 2. 查询图片
-        Picture picture = pictureService.getById(deleteRequest.getId());
-        ThrowUtils.throwIf(picture == null, ErrorCode.NOT_FOUND_ERROR);
-        // 3. 检查身份
         User loginUser = userService.getLoginUser(httpServletRequest);
-        // 3.1 如果当前用户不为管理员用户并且不是该照片的所属用户，则不允许删除
-        if (!userService.isAdmin(loginUser) && !picture.getUserId().equals(loginUser.getId())) {
-            return ResultUtils.error(ErrorCode.NO_AUTH_ERROR);
-        }
-        // 3.2 删除该张图片的数据库信息
-        boolean result = pictureService.removeById(deleteRequest.getId());
-        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
+        pictureService.deletePicture(deleteRequest, loginUser);
         return ResultUtils.success(true);
     }
 
@@ -144,20 +137,8 @@ public class PictureController {
         if (pictureUpdateRequest.getId() == null || pictureUpdateRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        // 2. 将实体类和dto对象进行转换
-        Picture picture = new Picture();
-        BeanUtil.copyProperties(pictureUpdateRequest, picture);
-        picture.setTags(JSONUtil.toJsonStr(pictureUpdateRequest.getTags()));
-        // 数据校验
-        pictureService.ValidPicture(picture);
-        // 3. 查询是否有该id的 图片
-        Picture oldPicture = pictureService.getById(pictureUpdateRequest.getId());
-        ThrowUtils.throwIf(oldPicture == null, ErrorCode.NOT_FOUND_ERROR);
-        // 有匹配上的图片
         User loginUser = userService.getLoginUser(request);
-        pictureService.fillReviewParams(picture, loginUser);
-        boolean result = pictureService.updateById(picture);
-        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
+        pictureService.updatePicture(pictureUpdateRequest, loginUser);
         return ResultUtils.success(true);
     }
 
@@ -173,6 +154,15 @@ public class PictureController {
         // 2. 获取图片
         Picture picture = pictureService.getById(id);
         ThrowUtils.throwIf(picture == null, ErrorCode.NOT_FOUND_ERROR);
+        // 校验图片检验逻辑
+        User loginUser = userService.getLoginUser(request);
+        Long spaceId = picture.getSpaceId();
+        if (spaceId != null) {
+            // 检查picture的userId是否和登录用户id一致
+            if (!picture.getUserId().equals(loginUser.getId())) {
+                throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
+            }
+        }
         // 3. 获取图片的vo
         PictureVo pictureVo = pictureService.getPictureVo(picture, request);
         return ResultUtils.success(pictureVo);
@@ -188,7 +178,7 @@ public class PictureController {
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<Page<Picture>> listPicture(@RequestBody PictureQueryRequest pictureQueryRequest) {
         // 1. 检验参数
-        ThrowUtils.throwIf(ObjectUtil.isEmpty(pictureQueryRequest), ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(pictureQueryRequest == null, ErrorCode.PARAMS_ERROR);
         // 2. 获得查询的queryWrapper
         QueryWrapper<Picture> queryWrapper = pictureService.getQueryWrapper(pictureQueryRequest);
         Page< Picture> page = new Page<>(pictureQueryRequest.getCurrent(), pictureQueryRequest.getPageSize());
@@ -207,7 +197,19 @@ public class PictureController {
     public BaseResponse<Page<PictureVo>> listPictureVo(@RequestBody PictureQueryRequest pictureQueryRequest, HttpServletRequest request) {
         // 1. 检验参数
         ThrowUtils.throwIf(ObjectUtil.isEmpty(pictureQueryRequest), ErrorCode.PARAMS_ERROR);
-        pictureQueryRequest.setReviewStatus(PictureReviewStatusEnum.PASS.getValue());
+        Long spaceId = pictureQueryRequest.getSpaceId();
+        if (spaceId == null) {
+            pictureQueryRequest.setReviewStatus(PictureReviewStatusEnum.PASS.getValue());
+            pictureQueryRequest.setNullSpaceId(true);
+        } else {
+            // 检查是否有权限查看私人图库
+            User loginUser = userService.getLoginUser(request);
+            Space space = spaceService.getById(spaceId);
+            ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND_ERROR);
+            if (!space.getUserId().equals(loginUser.getId())) {
+                throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "没有权限查看该空间");
+            }
+        }
         // 2. 获得查询的queryWrapper
         int current = pictureQueryRequest.getCurrent();
         int pageSize = pictureQueryRequest.getPageSize();
@@ -229,6 +231,7 @@ public class PictureController {
      * @param request
      * @return
      */
+    @Deprecated
     @PostMapping("/list/page/vo/cache")
     public BaseResponse<Page<PictureVo>> listPictureVoWithCache(@RequestBody PictureQueryRequest pictureQueryRequest, HttpServletRequest request) {
         // 1. 检验参数
@@ -286,27 +289,8 @@ public class PictureController {
     public BaseResponse<Boolean> editPicture(@RequestBody PictureEditRequest pictureEditRequest, HttpServletRequest request) {
         // 1. 参数检验
         ThrowUtils.throwIf(ObjectUtil.isEmpty(pictureEditRequest), ErrorCode.PARAMS_ERROR);
-        // 2. 将实体类和dto对象进行转换
-        Picture picture = new Picture();
-        BeanUtil.copyProperties(pictureEditRequest, picture);
-        // 将前端收集的List<String>转换成JSON字符串
-        picture.setTags(JSONUtil.toJsonStr(pictureEditRequest.getTags()));
-        // 添加修改时间
-        picture.setEditTime(new Date());
         User loginUser = userService.getLoginUser(request);
-        // 进行数据校验
-        pictureService.ValidPicture(picture);
-        // 3. 查询数据库中是否有该id的图片
-        Picture oldPicture = pictureService.getById(pictureEditRequest.getId());
-        ThrowUtils.throwIf(oldPicture == null, ErrorCode.NOT_FOUND_ERROR);
-        // 4. 判断用户是否有权限修改该图片（仅本人和管理员可以编辑）
-        if (!oldPicture.getUserId().equals(loginUser.getId()) && !userService.isAdmin(loginUser)) {
-            throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
-        }
-        pictureService.fillReviewParams(picture, loginUser);
-        // 4. 更新数据库中的图片信息
-        boolean result = pictureService.updateById(picture);
-        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
+        pictureService.editPicture(pictureEditRequest, loginUser);
         return ResultUtils.success(true);
     }
 
@@ -331,6 +315,51 @@ public class PictureController {
         ThrowUtils.throwIf(pictureReviewRequest == null, ErrorCode.PARAMS_ERROR);
         User loginUser = userService.getLoginUser(request);
         pictureService.doPictureReview(pictureReviewRequest, loginUser);
+        return ResultUtils.success(true);
+    }
+
+    /**
+     * 通过图片搜索图片，此功能只给私有空间使用
+     *
+     * @param searchPictureByPictureRequest
+     * @param request
+     * @return
+     */
+    @PostMapping("/search/picture")
+    public BaseResponse<List<ImageSearchResult>> searchPictureByPicture(@RequestBody SearchPictureByPictureRequest searchPictureByPictureRequest, HttpServletRequest request) {
+        // 1. 检验参数
+        ThrowUtils.throwIf(searchPictureByPictureRequest == null, ErrorCode.PARAMS_ERROR);
+        User loginUser = userService.getLoginUser(request);
+        List<ImageSearchResult> imageSearchResults = pictureService.searchPictureByPicture(searchPictureByPictureRequest, loginUser);
+        return ResultUtils.success(imageSearchResults);
+    }
+
+    /**
+     * 通过颜色查询图片,此功能只给私有图库使用
+     */
+    @PostMapping("/search/color")
+    public BaseResponse<List<PictureVo>> searchPictureByColor(@RequestBody SearchPictureByColorRequest searchPictureByColorRequest, HttpServletRequest request) {
+        // 1. 检验参数
+        ThrowUtils.throwIf(searchPictureByColorRequest == null, ErrorCode.PARAMS_ERROR);
+        // 2. 获取登录用户
+        User loginUser = userService.getLoginUser(request);
+        // 3. 调用Service方法
+        List<PictureVo> result = pictureService.searchPictureByColor(searchPictureByColorRequest, loginUser);
+        return ResultUtils.success(result);
+    }
+
+    /**
+     * 批量更新接口
+     */
+    @PostMapping("/edit/batch")
+    public BaseResponse<Boolean> editPictureByBatch(@RequestBody PictureEditByBatchRequest pictureEditByBatchRequest, HttpServletRequest request) {
+        // 1. 检验参数
+        ThrowUtils.throwIf(pictureEditByBatchRequest == null, ErrorCode.PARAMS_ERROR);
+        // 2. 获取登录用户
+        User loginUser = userService.getLoginUser(request);
+        // 3. 调用Service方法
+        pictureService.editPictureByBatch(pictureEditByBatchRequest, loginUser);
+        // 4. 返回结果
         return ResultUtils.success(true);
     }
 }

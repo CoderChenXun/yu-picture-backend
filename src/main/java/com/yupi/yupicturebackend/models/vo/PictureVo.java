@@ -100,6 +100,16 @@ public class PictureVo implements Serializable {
      */
     private UserVo user;
 
+    /**
+     * 空间 id
+     */
+    private Long spaceId;
+
+    /**
+     * 图片主色调
+     */
+    private String picColor;
+
     private static final long serialVersionUID = -1346946354503342999L;
 
     // 实现静态方法PictureVo转Picture

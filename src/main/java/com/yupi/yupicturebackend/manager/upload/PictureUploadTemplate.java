@@ -49,17 +49,19 @@ public abstract class PictureUploadTemplate {
             tmpFile = File.createTempFile(uploadFilePath, null);
             transferFileOrUrlToTmpFile(inputSource, tmpFile);
             PutObjectResult putObjectResult = cosManager.putPictureObject(uploadFilePath, tmpFile);
+            // 取出imageInfo
+            ImageInfo imageInfo = putObjectResult.getCiUploadResult().getOriginalInfo().getImageInfo();
             // 4. 封装返回结果
             ProcessResults processResults = putObjectResult.getCiUploadResult().getProcessResults();
             List<CIObject> objectList = processResults.getObjectList();
-            if(CollUtil.isNotEmpty(objectList)){
+            if (CollUtil.isNotEmpty(objectList)) {
                 // 获取压缩图返回结果
                 CIObject compressedCiObject = objectList.get(0);
                 CIObject thumbnailCiObject = compressedCiObject;
-                if(objectList.size() > 1){
+                if (objectList.size() > 1) {
                     thumbnailCiObject = objectList.get(1);
                 }
-                return getUploadPictureResult(fileName,compressedCiObject,thumbnailCiObject);
+                return getUploadPictureResult(fileName, compressedCiObject, thumbnailCiObject, imageInfo);
             }
             return getUploadPictureResult(fileName, uploadFilePath, tmpFile, putObjectResult);
         }catch (Exception e){
@@ -75,7 +77,7 @@ public abstract class PictureUploadTemplate {
         ImageInfo imageInfo = putObjectResult.getCiUploadResult().getOriginalInfo().getImageInfo();
         int width = imageInfo.getWidth();
         int height = imageInfo.getHeight();
-        double picScale = NumberUtil.round(width * 1.0 / height,2).doubleValue();
+        double picScale = NumberUtil.round(width * 1.0 / height, 2).doubleValue();
         result.setPicName(FileUtil.mainName(fileName));
         result.setPicSize(FileUtil.size(tmpFile));
         result.setPicWidth(width);
@@ -83,21 +85,25 @@ public abstract class PictureUploadTemplate {
         result.setPicScale(picScale);
         result.setUrl(cosClientConfig.getHost() + "/" + uploadFilePath);
         result.setPicFormat(imageInfo.getFormat());
+        // 添加的图片主色调处理
+        result.setPicColor(imageInfo.getAve());
         return result;
     }
 
-    private UploadPictureResult getUploadPictureResult(String fileName, CIObject compressedCiObject, CIObject thumbnailCiObject) {
+    private UploadPictureResult getUploadPictureResult(String fileName, CIObject compressedCiObject, CIObject thumbnailCiObject, ImageInfo imageInfo) {
         UploadPictureResult result = new UploadPictureResult();
         int width = compressedCiObject.getWidth();
         int height = compressedCiObject.getHeight();
-        double picScale = NumberUtil.round(width * 1.0 / height,2).doubleValue();
+        double picScale = NumberUtil.round(width * 1.0 / height, 2).doubleValue();
         result.setPicName(FileUtil.mainName(fileName));
         result.setPicSize(compressedCiObject.getSize().longValue());
         result.setPicWidth(width);
         result.setPicHeight(height);
         result.setPicScale(picScale);
-        result.setUrl(cosClientConfig.getHost() + "/" + compressedCiObject.getKey());
         result.setPicFormat(compressedCiObject.getFormat());
+        // 添加的图片主色调处理
+        result.setPicColor(imageInfo.getAve());
+        result.setUrl(cosClientConfig.getHost() + "/" + compressedCiObject.getKey());
         result.setThumbnailUrl(cosClientConfig.getHost() + "/" + thumbnailCiObject.getKey());
         return result;
     }
